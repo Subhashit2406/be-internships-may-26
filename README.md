@@ -3,6 +3,7 @@
 Build a minimal production-leaning service that can **handle load**, **rate limit**, and **avoid duplicates** via idempotency.
 
 ## Endpoints (to keep)
+
 - `POST /v1/signals`
   - body: `{ "userId": "string", "type": "string", "payload": "string" }`
   - headers: `X-API-Key`, `Idempotency-Key` (optional)
@@ -13,6 +14,7 @@ Build a minimal production-leaning service that can **handle load**, **rate limi
 - `GET /healthz`
 
 ## Your Tasks
+
 1. **Implement a robust rate limiter** in `src/rateLimit.js`.
 2. **Make idempotency safe across scale** in `src/signals.js`.
 3. **Handle DB failure** gracefully with retry/backoff.
@@ -20,8 +22,10 @@ Build a minimal production-leaning service that can **handle load**, **rate limi
 5. **Finish the tests** in `tests/*.test.js`.
 
 ## Deliverables
+
 - Working service, passing tests, updated README, SCALE.md.
 - Optional deploy link.
+
 ---
 
 ## Extra Production Constraints (must pass)
@@ -32,3 +36,25 @@ Build a minimal production-leaning service that can **handle load**, **rate limi
 - **Scale Plan (10k RPS):** Fill `SCALE.md` with a clear, concise approach (indexes, pooling, caching, queues, horizontal scale, idempotency store).
 
 > We will run additional **hidden concurrency/multi-instance tests** during evaluation.
+
+---
+
+## Solution Implementation
+
+### 1. Robust Rate Limiter
+
+- Moved rate limiting storage to a `rate_limits` table in SQLite.
+- Used an atomic `INSERT ... ON CONFLICT DO UPDATE` transaction in SQLite to check and increment rate limit counters without concurrency races. This ensures safety across multiple running server instances.
+
+### 2. Atomic Idempotency
+
+- Relied on the database `UNIQUE` constraint for `idempotency_key`.
+- Intercepted the duplicate constraint error (`SQLITE_CONSTRAINT`), retried, and returned the existing record from the database to prevent duplicate writes under concurrency.
+
+### 3. DB Failure Handling
+
+- Implemented `withRetry` helper utilizing exponential backoff and randomized jitter to handle transient errors (`SQLITE_BUSY` or simulated DB outages) gracefully.
+
+### 4. Tests
+
+- Expanded test coverage with concurrency checks for idempotency and rate limiting, using isolated database paths to prevent cross-test pollution.
